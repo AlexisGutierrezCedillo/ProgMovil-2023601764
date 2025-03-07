@@ -1,85 +1,78 @@
-import java.time.LocalDate
-import java.time.Period
-import java.time.temporal.ChronoUnit
+package com.example.holatoast
 
-fun main() {
-    var seleccionMenu = 0
+import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 
-    do {
-        println("\n--- MENU ---")
-        println("1. Sumar tres números")
-        println("2. Ingresar nombre completo")
-        println("3. Calcular tiempo vivido")
-        println("4. Salir")
-        println("Opción: ")
-
-        seleccionMenu = readLine()?.toIntOrNull() ?: 0
-
-        when (seleccionMenu) {
-            1 -> sumar()
-            2 -> ingresarNombre()
-            3 -> calcularTiempo()
-            4 -> salir()
-            else -> println("Opción no válida, intente de nuevo.")
-        }
-
-    } while (seleccionMenu != 4)
-}
-
-fun sumar() {
-    println("Ingrese tres números: ")
-
-    print("Número 1: ")
-    val numero1 = readLine()?.toDoubleOrNull() ?: 0.0
-
-    print("Número 2: ")
-    val numero2 = readLine()?.toDoubleOrNull() ?: 0.0
-
-    print("Número 3: ")
-    val numero3 = readLine()?.toDoubleOrNull() ?: 0.0
-
-    val resultadoSuma = numero1 + numero2 + numero3
-
-    println("La suma es: $resultadoSuma")
-}
-
-fun ingresarNombre() {
-    println("Ingresa tu nombre completo: ")
-
-    val nombreIngresado = readLine()?.trim() ?: "Nombre no ingresado"
-
-    println("Bienvenido $nombreIngresado")
-}
-
-fun calcularTiempo() {
-    println("Ingrese su fecha de nacimiento (YYYY-MM-DD): ")
-    val fechaIngreso = readLine()
-
-    try {
-        val nacimiento = LocalDate.parse(fechaIngreso)  // Convertir texto a fecha
-        val hoy = LocalDate.now()  // Fecha de hoy
-
-        if (nacimiento.isAfter(hoy)) {
-            println("¡No puedes poner una fecha de nacimiento después de hoy!")
-            return
-        }
-
-        val tiempoVida = Period.between(nacimiento, hoy)
-        val totalDias = ChronoUnit.DAYS.between(nacimiento, hoy)
-        val totalHoras = totalDias * 24
-        val totalMinutos = totalHoras * 60
-        val totalSegundos = totalMinutos * 60
-
-        println("\nTu tiempo vivido es:")
-        println(" ${tiempoVida.years} años, ${tiempoVida.months} meses y ${tiempoVida.days} días.")
-        println(" Un total de $totalDias días.")
-        println(" Aproximadamente $totalHoras horas, $totalMinutos minutos y $totalSegundos segundos.")
-
-    } catch (e: Exception) {
-        println("¡Datos invalidos! Prueba poner YYYY-MM-DD")
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent { UIPrincipal() }
     }
 }
 
-fun salir() {
-    println("Gracias por usar el programa. ¡Hasta luego!")
+@Composable
+fun UIPrincipal() {
+    val contexto = LocalContext.current
+    var nombre by rememberSaveable { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp) // Padding correcto
+    ) {
+        Text(
+            text = "Nombre:",
+            modifier = Modifier.padding(bottom = 8.dp) // Especificado correctamente
+        )
+
+        OutlinedTextField(
+            value = nombre,
+            onValueChange = { nombre = it },
+            label = { Text("Introduce tu nombre") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp) // Padding horizontal correcto
+        )
+
+        Spacer(modifier = Modifier.height(16.dp)) // Espacio entre elementos
+
+        Button(
+            onClick = { Toast.makeText(contexto, "Hola $nombre!!", Toast.LENGTH_SHORT).show() },
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        ) {
+            Text("Saludar!")
+        }
+    }
+}
+@Composable
+fun ingresarNombre(){
+    println("Ingresa tu nombre Completo: ")
+    val input = readLine()
+}
+
+@Preview(showBackground = true)
+@Composable
+fun Previsualizacion(){
+    UIPrincipal()
 }
