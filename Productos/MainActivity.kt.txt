@@ -1,0 +1,519 @@
+package com.example.productos
+
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.os.Bundle
+import android.util.Base64
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import coil.compose.AsyncImage
+import com.example.productos.ui.theme.ProductosTheme
+import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
+import androidx.compose.ui.graphics.asImageBitmap
+
+
+// Modelo de datos
+data class Producto(
+    val id: Int,
+    val nombre: String,
+    val precio: Double,
+    val descripcion: String?,
+    val imagenUrl: String? = null // Aquí se almacenará la cadena Base64
+)
+
+// Función para obtener los productos desde la base de datos
+fun obtenerProductos(context: Context): List<Producto> {
+    val dbHelper = DBHelper(context)
+    val db = dbHelper.readableDatabase
+    val cursor = db.rawQuery("SELECT * FROM producto", null)
+    val productos = mutableListOf<Producto>()
+    while (cursor.moveToNext()) {
+        productos.add(
+            Producto(
+                id = cursor.getInt(cursor.getColumnIndexOrThrow("id_producto")),
+                nombre = cursor.getString(cursor.getColumnIndexOrThrow("nombre")),
+                precio = cursor.getDouble(cursor.getColumnIndexOrThrow("precio")),
+                descripcion = cursor.getString(cursor.getColumnIndexOrThrow("descripcion")),
+                imagenUrl = cursor.getString(cursor.getColumnIndexOrThrow("imagenURL"))
+            )
+        )
+    }
+    cursor.close()
+    db.close()
+    return productos
+}
+
+// Función para decodificar una cadena Base64 a Bitmap
+fun base64ToBitmap(base64Str: String): Bitmap? {
+    return try {
+        val imageBytes = Base64.decode(base64Str, Base64.NO_WRAP)
+        BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
+// Definición de rutas para la navegación
+sealed class Screen(val route: String) {
+    object Lista : Screen("lista_productos")
+    object Agregar : Screen("agregar_producto")
+    object Editar : Screen("editar_producto/{productoId}") {
+        fun createRoute(productoId: Int) = "editar_producto/$productoId"
+    }
+}
+
+/**
+ * Función suspendida que convierte un URI a una cadena Base64.
+ * Proceso:
+ * - Abre el InputStream del URI
+ * - Decodifica el Bitmap original
+ * - Redimensiona a 100x100 píxeles
+ * - Comprime a JPEG con calidad 80
+ * - Convierte a Base64 sin saltos de línea (NO_WRAP)
+ */
+suspend fun uriToBase64(context: Context, uri: Uri): String? {
+    return try {
+        println("Intentando abrir InputStream para $uri")
+        context.contentResolver.openInputStream(uri)?.use { inputStream ->
+            val originalBitmap = BitmapFactory.decodeStream(inputStream)
+            if (originalBitmap == null) {
+                println("Error: originalBitmap es null para $uri")
+                return null
+            }
+            println("Bitmap original: ${originalBitmap.width} x ${originalBitmap.height}")
+            // Redimensiona a 100x100
+            val scaledBitmap: Bitmap = Bitmap.createScaledBitmap(originalBitmap, 100, 100, true)
+            println("Bitmap escalado: ${scaledBitmap.width} x ${scaledBitmap.height}")
+            val outputStream = ByteArrayOutputStream()
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+            val imageBytes = outputStream.toByteArray()
+            val base64Str = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+            println("Conversión a Base64 exitosa. Longitud: ${base64Str.length}")
+            println("Conversión a Base64 exitosa. Base64: ${base64Str}")
+            base64Str
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
+// Composable que muestra la tarjeta de un producto
+@Composable
+fun TarjetaProducto(
+    producto: Producto,
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        shape = RoundedCornerShape(8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!producto.imagenUrl.isNullOrEmpty()) {
+                val bitmap = base64ToBitmap(producto.imagenUrl)
+                if (bitmap != null) {
+                    Image(
+                        painter = BitmapPainter(bitmap.asImageBitmap()),
+                        contentDescription = "Imagen del producto",
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = "Imagen por defecto",
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                    )
+                }
+            } else {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = "Imagen por defecto",
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = producto.nombre, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "$${producto.precio}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.Gray
+                )
+                producto.descripcion?.let {
+                    Text(text = it, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            IconButton(onClick = onEditClick) {
+                Icon(Icons.Default.Edit, contentDescription = "Editar")
+            }
+            IconButton(onClick = onDeleteClick) {
+                Icon(Icons.Default.Delete, contentDescription = "Eliminar")
+            }
+        }
+    }
+}
+
+// Composable para listar productos
+@Composable
+fun ListaProductos(
+    context: Context,
+    onEditarProducto: (Int) -> Unit,
+    onEliminarProducto: (Int) -> Unit
+) {
+    var listaProductos by remember { mutableStateOf(listOf<Producto>()) }
+    LaunchedEffect(Unit) {
+        listaProductos = obtenerProductos(context)
+    }
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(listaProductos) { producto ->
+            TarjetaProducto(
+                producto = producto,
+                onEditClick = { onEditarProducto(producto.id) },
+                onDeleteClick = { onEliminarProducto(producto.id) }
+            )
+        }
+    }
+}
+
+// Pantalla para agregar un nuevo producto
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AgregarProductoScreen(onProductoAgregado: () -> Unit) {
+    val context = LocalContext.current
+    val dbHelper = DBHelper(context)
+    var nombre by remember { mutableStateOf("") }
+    var precio by remember { mutableStateOf("") }
+    var descripcion by remember { mutableStateOf("") }
+    var imagenUri by remember { mutableStateOf<Uri?>(null) }
+    val currentContext = LocalContext.current
+    // Launcher para seleccionar imagen
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+            currentContext.contentResolver.takePersistableUriPermission(it, flags)
+        }
+        imagenUri = uri
+    }
+    val scope = rememberCoroutineScope()
+
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Agregar Producto") }) }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .padding(16.dp)
+                .fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = nombre,
+                onValueChange = { nombre = it },
+                label = { Text("Nombre") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = precio,
+                onValueChange = { precio = it },
+                label = { Text("Precio") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = descripcion,
+                onValueChange = { descripcion = it },
+                label = { Text("Descripción") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Button(onClick = { launcher.launch("image/*") }) {
+                Text("Seleccionar Imagen")
+            }
+            imagenUri?.let { uri ->
+                AsyncImage(
+                    model = uri,
+                    contentDescription = "Imagen seleccionada",
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    scope.launch {
+                        val base64Image = imagenUri?.let { uriToBase64(context, it) }
+                        println("Longitud Base64: ${base64Image?.length}")
+                        val nuevoProducto = Producto(
+                            id = 0,
+                            nombre = nombre,
+                            precio = precio.toDoubleOrNull() ?: 0.0,
+                            descripcion = descripcion,
+                            imagenUrl = base64Image
+                        )
+                        dbHelper.insertarProducto(nuevoProducto)
+                        onProductoAgregado()
+                    }
+                },
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text("Guardar")
+            }
+        }
+    }
+}
+
+// Pantalla para editar un producto existente
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditProductoScreen(productoId: Int, onProductoActualizado: () -> Unit) {
+    val context = LocalContext.current
+    val dbHelper = DBHelper(context)
+    var producto by remember { mutableStateOf<Producto?>(null) }
+    LaunchedEffect(productoId) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.rawQuery("SELECT * FROM producto WHERE id_producto = ?", arrayOf(productoId.toString()))
+        if (cursor.moveToFirst()) {
+            producto = Producto(
+                id = cursor.getInt(cursor.getColumnIndexOrThrow("id_producto")),
+                nombre = cursor.getString(cursor.getColumnIndexOrThrow("nombre")),
+                precio = cursor.getDouble(cursor.getColumnIndexOrThrow("precio")),
+                descripcion = cursor.getString(cursor.getColumnIndexOrThrow("descripcion")),
+                imagenUrl = cursor.getString(cursor.getColumnIndexOrThrow("imagenURL"))
+            )
+        }
+        cursor.close()
+        db.close()
+    }
+    var nombre by remember { mutableStateOf(producto?.nombre ?: "") }
+    var precio by remember { mutableStateOf(producto?.precio?.toString() ?: "") }
+    var descripcion by remember { mutableStateOf(producto?.descripcion ?: "") }
+    var imagenUri by remember { mutableStateOf<Uri?>(null) }
+    LaunchedEffect(producto) {
+        producto?.let {
+            nombre = it.nombre
+            precio = it.precio.toString()
+            descripcion = it.descripcion ?: ""
+        }
+    }
+    val currentContext = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+            currentContext.contentResolver.takePersistableUriPermission(it, flags)
+        }
+        imagenUri = uri
+    }
+    val scope = rememberCoroutineScope()
+
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Editar Producto") }) }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .padding(16.dp)
+                .fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = nombre,
+                onValueChange = { nombre = it },
+                label = { Text("Nombre") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = precio,
+                onValueChange = { precio = it },
+                label = { Text("Precio") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = descripcion,
+                onValueChange = { descripcion = it },
+                label = { Text("Descripción") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Button(onClick = { launcher.launch("image/*") }) {
+                Text("Seleccionar Imagen")
+            }
+            // Vista previa: si se selecciona una nueva imagen se muestra; si no, se muestra la imagen guardada en Base64.
+            when {
+                imagenUri != null -> {
+                    AsyncImage(
+                        model = imagenUri,
+                        contentDescription = "Imagen seleccionada",
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                }
+                !producto?.imagenUrl.isNullOrEmpty() -> {
+                    val bitmap = base64ToBitmap(producto!!.imagenUrl!!)
+                    if (bitmap != null) {
+                        Image(
+                            painter = BitmapPainter(bitmap.asImageBitmap()),
+                            contentDescription = "Imagen guardada",
+                            modifier = Modifier
+                                .size(100.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                            contentDescription = "Imagen por defecto",
+                            modifier = Modifier
+                                .size(100.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    scope.launch {
+                        val base64Image = imagenUri?.let { uriToBase64(context, it) } ?: producto?.imagenUrl
+                        val updatedProducto = Producto(
+                            id = productoId,
+                            nombre = nombre,
+                            precio = precio.toDoubleOrNull() ?: 0.0,
+                            descripcion = descripcion,
+                            imagenUrl = base64Image
+                        )
+                        dbHelper.actualizarProducto(updatedProducto)
+                        onProductoActualizado()
+                    }
+                },
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text("Guardar")
+            }
+        }
+    }
+}
+
+// Pantalla principal que muestra la lista y permite navegar a agregar/editar
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UIPrincipal(
+    onAgregarProducto: () -> Unit,
+    onEditarProducto: (Int) -> Unit,
+    onEliminarProducto: (Int) -> Unit
+) {
+    val context = LocalContext.current
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Productos disponibles") },
+                actions = {
+                    IconButton(onClick = onAgregarProducto) {
+                        Icon(Icons.Default.Add, contentDescription = "Agregar producto")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding)) {
+            ListaProductos(
+                context = context,
+                onEditarProducto = onEditarProducto,
+                onEliminarProducto = onEliminarProducto
+            )
+        }
+    }
+}
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            ProductosTheme {
+                val navController = rememberNavController()
+                val context = LocalContext.current
+                val onEliminarProducto: (Int) -> Unit = { productoId ->
+                    DBHelper(context).eliminarProducto(productoId)
+                    navController.navigate(Screen.Lista.route) {
+                        popUpTo(Screen.Lista.route) { inclusive = true }
+                    }
+                }
+                NavHost(navController = navController, startDestination = Screen.Lista.route) {
+                    composable(Screen.Lista.route) {
+                        UIPrincipal(
+                            onAgregarProducto = { navController.navigate(Screen.Agregar.route) },
+                            onEditarProducto = { productoId ->
+                                navController.navigate(Screen.Editar.createRoute(productoId))
+                            },
+                            onEliminarProducto = onEliminarProducto
+                        )
+                    }
+                    composable(Screen.Agregar.route) {
+                        AgregarProductoScreen(onProductoAgregado = { navController.popBackStack() })
+                    }
+                    composable(
+                        route = Screen.Editar.route,
+                        arguments = listOf(navArgument("productoId") { type = NavType.IntType })
+                    ) { backStackEntry ->
+                        val productoId = backStackEntry.arguments?.getInt("productoId") ?: 0
+                        EditProductoScreen(productoId = productoId, onProductoActualizado = { navController.popBackStack() })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewUIPrincipal() {
+    ProductosTheme {
+        UIPrincipal(
+            onAgregarProducto = {},
+            onEditarProducto = {},
+            onEliminarProducto = {}
+        )
+    }
+}
