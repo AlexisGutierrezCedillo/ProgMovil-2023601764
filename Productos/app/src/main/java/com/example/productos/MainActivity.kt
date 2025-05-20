@@ -540,6 +540,7 @@ fun UIPrincipal(
                         Column(
                             modifier = Modifier
                                 .widthIn(max = 300.dp)
+                                .heightIn(max = 500.dp)
                                 .background(
                                     MaterialTheme.colorScheme.surface,
                                     RoundedCornerShape(12.dp)
