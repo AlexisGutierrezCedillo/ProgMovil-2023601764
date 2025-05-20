@@ -21,7 +21,6 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 import android.os.Bundle
 
-
 // Actividad principal que implementa SensorEventListener para manejar el acelerómetro
 class MainActivity : ComponentActivity(), SensorEventListener {
 
@@ -32,7 +31,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     // Vista personalizada donde se dibuja y anima la pelota
     private lateinit var ballView: BallView
 
-    // Metodo de creación de la actividad
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Inicializa la vista personalizada de la pelota
@@ -45,7 +43,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     }
 
-    // Registra el listener del acelerómetro al reanudarse la actividad
     override fun onResume() {
         super.onResume()
         accelerometer?.let {
@@ -53,7 +50,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         }
     }
 
-    // Desregistra el listener cuando la actividad se pausa
     override fun onPause() {
         super.onPause()
         sensorManager.unregisterListener(this)
@@ -62,10 +58,9 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     // Método que recibe los cambios del sensor
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
-            // Verifica que el sensor sea el acelerómetro
             if (it.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-                val x = it.values[0] // Obtiene el valor en el eje X
-                val y = it.values[1] // Obtiene el valor en el eje Y
+                val x = it.values[0] // Eje X
+                val y = it.values[1] // Eje Y
                 // Invierte el valor de x para adecuarlo a la dirección de la pantalla
                 ballView.updatePosition(-x, y)
             }
@@ -78,17 +73,16 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     // Clase interna que define la vista personalizada para animar la pelota
     class BallView(context: Context) : View(context) {
 
-        // Paint general para dibujar elementos no relacionados a la pelota (agujero, textos)
+        // Paint para elementos como el agujero y textos
         private val paint = Paint().apply { isAntiAlias = true }
-
-        // Paint exclusivo para la pelota, para conservar su color de forma independiente
+        // Paint exclusivo para la pelota
         private val ballPaint = Paint().apply {
             isAntiAlias = true
             color = Color.WHITE // Color inicial de la pelota
         }
 
-        // Color de fondo de la vista
-        private var backgroundColor: Int = Color.BLACK
+        // Color de fondo de la vista (cuando no está en el agujero se usa un tono oscuro)
+        private var backgroundColor: Int = Color.rgb(40, 40, 40)
         // Radio de la pelota
         private val radius = 50f
         // Posición actual de la pelota
@@ -101,7 +95,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         // Velocidades actuales de la pelota en X y Y
         private var velX = 0f
         private var velY = 0f
-        // Velocidad máxima permitida y factor de fricción para desacelerar
+        // Velocidad máxima permitida y factor de fricción
         private val maxSpeed = 500f
         private val friction = 0.98f
 
@@ -109,26 +103,26 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         private var soundPool: SoundPool
         private var bounceSound: Int = 0
 
-        // Coordenadas y radio del "agujero" en pantalla (puede usarse para otra lógica)
+        // Coordenadas y radio del "agujero" en pantalla
         private var holeX = 0f
         private var holeY = 0f
         private var holeRadius = 100f
-        // Temporizador para la interacción cuando la pelota está en el agujero
+        // Temporizador para cuando la pelota está en el agujero
         private var holeTimer: CountDownTimer? = null
         // Indica si la pelota se encuentra actualmente en el agujero
         private var isInHole = false
 
-        // Puntuación del jugador y tiempo restante para el temporizador del agujero
+        // Puntuación del jugador y tiempo restante para el temporizador
         private var score = 0
         private var timeLeft = 5
 
-        // Variables para controlar las colisiones y evitar múltiples disparos de evento
+        // Variables para controlar las colisiones y evitar múltiples eventos
         private var collidingLeft = false
         private var collidingRight = false
         private var collidingTop = false
         private var collidingBottom = false
 
-        // Instancia del Vibrator para hacer vibrar el dispositivo al chocar
+        // Instancia del Vibrator para vibrar el dispositivo al chocar
         private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
         init {
@@ -151,14 +145,12 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             generateHolePosition()
         }
 
-        // Se llama cuando cambia el tamaño de la vista (por ejemplo, al iniciar)
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
             screenWidth = w  // Actualiza el ancho de la pantalla
             screenHeight = h // Actualiza el alto de la pantalla
-            // Inicializa la posición de la pelota en el centro de la pantalla
+            // Inicializa la posición de la pelota en el centro
             ballX = (w / 2).toFloat()
             ballY = (h / 2).toFloat()
-            // Regenera la posición del agujero
             generateHolePosition()
         }
 
@@ -170,38 +162,33 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
         // Actualiza la posición de la pelota basándose en los cambios de aceleración
         fun updatePosition(dx: Float, dy: Float) {
-            // Si las dimensiones aún no se han establecido, no hace nada
             if (screenWidth == 0 || screenHeight == 0) return
 
-            // Actualiza las velocidades incrementando con el valor del sensor multiplicado para mayor efecto
+            // Actualiza las velocidades
             velX += dx * 2
             velY += dy * 2
 
-            // Limita la velocidad para que no exceda la máxima permitida
             velX = velX.coerceIn(-maxSpeed, maxSpeed)
             velY = velY.coerceIn(-maxSpeed, maxSpeed)
 
-            // Actualiza la posición sumando la velocidad
+            // Actualiza la posición
             ballX += velX
             ballY += velY
 
-            // Calcula las condiciones de colisión con cada borde
+            // Calcula las colisiones con los bordes
             val newCollidingLeft = ballX - radius <= 0
             val newCollidingRight = ballX + radius >= screenWidth
             val newCollidingTop = ballY - radius <= 0
             val newCollidingBottom = ballY + radius >= screenHeight
 
-            // Si ocurre una colisión (y no se estaba colisionando previamente), reproduce sonido, cambia colores y vibra
+            // Si ocurre una colisión (y no se estaba colisionando previamente)
             if ((newCollidingLeft && !collidingLeft) ||
                 (newCollidingRight && !collidingRight) ||
                 (newCollidingTop && !collidingTop) ||
                 (newCollidingBottom && !collidingBottom)) {
 
-                // Reproduce el sonido de rebote
                 soundPool.play(bounceSound, 1f, 1f, 0, 0, 1f)
-                // Cambia los colores de fondo y de la pelota
-                changeColors()
-                // Hace vibrar el dispositivo por 100 milisegundos
+                changeColors()  // Cambia colores en colisión (solo si no está en el agujero)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
                 } else {
@@ -210,7 +197,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 invalidate() // Redibuja la vista
             }
 
-            // Corrige la posición y la velocidad en caso de colisión para que la pelota no salga de la pantalla
+            // Corrige la posición y velocidad para evitar que la pelota salga de la pantalla
             if (newCollidingLeft) {
                 ballX = radius
                 velX *= -0.8f
@@ -228,116 +215,107 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 velY *= -0.8f
             }
 
-            // Actualiza el estado de las colisiones para evitar múltiples eventos
             collidingLeft = newCollidingLeft
             collidingRight = newCollidingRight
             collidingTop = newCollidingTop
             collidingBottom = newCollidingBottom
 
-            // Aplica fricción a las velocidades para desacelerar gradualmente la pelota
+            // Aplica fricción
             velX *= friction
             velY *= friction
 
-            // Determina si la pelota está en el "agujero" (lógica de juego)
+            // Verifica si la pelota está en el agujero
             val inHole = isBallInHole()
             if (inHole) {
                 if (!isInHole) {
-                    startHoleTimer()//Se inicia el contador
-                    changeColors() // Hace cambiar a negro el color del fondo mientras no esté dentro del agujero
+                    // Al entrar en el agujero, inicia el temporizador y la transición de fondo
+                    startHoleTimer()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        val pattern = longArrayOf(0, 1, 0) // Espera 0ms, vibra 500ms, pausa 500ms, repite
-                        vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0)) // Se repite desde índice 0
+                        val pattern = longArrayOf(0, 1, 0)
+                        vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0))
                     } else {
                         @Suppress("DEPRECATION")
-                        vibrator.vibrate(longArrayOf(0, 1, 0), 0) // Para Android < 8.0
+                        vibrator.vibrate(longArrayOf(0, 1, 0), 0)
                     }
                     isInHole = true
                 }
             } else {
                 if (isInHole) {
+                    // Si la pelota sale del agujero, se cancela el temporizador y se restablece el fondo
                     stopHoleTimer()
-                    changeColors() // Hace cambiar a blanco el color del fondo mientras esté dentro del agujero
-                    vibrator.cancel() // Detiene la vibración
+                    backgroundColor = Color.rgb(40, 40, 40)
+                    vibrator.cancel()
                     isInHole = false
                 }
             }
 
-            invalidate() // Solicita redibujar la vista con la nueva posición
+            invalidate() // Solicita redibujar la vista
         }
 
-        // Inicia un temporizador de 5 segundos mientras la pelota se encuentra en el agujero
+        // Inicia el temporizador de 5 segundos y actualiza gradualmente el fondo de oscuro a blanco
         private fun startHoleTimer() {
-            holeTimer = object : CountDownTimer(5000, 1000) {
+            holeTimer = object : CountDownTimer(5000, 50) {
                 override fun onTick(millisUntilFinished: Long) {
+                    // Actualiza el contador entero para mostrar en pantalla
                     timeLeft = (millisUntilFinished / 1000).toInt()
+                    // Calcula la fracción de transición (0 = fondo oscuro, 1 = blanco)
+                    val fraction = 1 - (millisUntilFinished.toFloat() / 5000f)
+                    val colorValue = (fraction * 215+40).toInt().coerceIn(0, 255)
+                    backgroundColor = Color.rgb(colorValue, colorValue, colorValue)
+                    invalidate()
                 }
                 override fun onFinish() {
                     score++
-                    changeColors()
                     generateHolePosition()
-                    timeLeft = 5
-                    // Ajusta el tamaño del agujero en función del puntaje, limitándolo entre 10 y 100
+                    timeLeft = 0
+                    backgroundColor = Color.WHITE
+                    // Ajusta el tamaño del agujero en función del puntaje
                     holeRadius = (100f - (score * 8)).coerceIn(10f, 100f)
+                    invalidate()
                 }
             }
             holeTimer?.start()
         }
 
-        // Detiene el temporizador cuando la pelota sale del agujero
+        // Detiene el temporizador
         private fun stopHoleTimer() {
             holeTimer?.cancel()
             holeTimer = null
         }
 
-        // Cambia el color de fondo y el de la pelota al ocurrir una colisión
+        // Cambia el color de la pelota en caso de colisión
         private fun changeColors() {
-            if(isBallInHole()){
-                // Nuevo color de fondo con tonos oscuros
-                backgroundColor = Color.rgb(255,255,255)
-            }else{
-                // Nuevo color de fondo con tonos oscuros
-                backgroundColor = Color.rgb(40,40,40)
-                // Nuevo color para la pelota con tonos vivos
-                ballPaint.color = Color.rgb(
-                    Random.nextInt(100, 256),
-                    Random.nextInt(100, 256),
-                    Random.nextInt(100, 256)
-                )
-            }
-
+            ballPaint.color = Color.rgb(
+                Random.nextInt(100, 256),
+                Random.nextInt(100, 256),
+                Random.nextInt(100, 256))
         }
 
-        // Determina si la pelota está dentro del agujero calculando la distancia entre sus centros
+        // Determina si la pelota está dentro del agujero
         private fun isBallInHole(): Boolean {
             val distance = sqrt((ballX - holeX).pow(2) + (ballY - holeY).pow(2))
             return distance - radius <= holeRadius
         }
 
-        // Método que dibuja en la vista
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            // Dibuja el fondo con el color actual
+            // Dibuja el fondo
             canvas.drawColor(backgroundColor)
-            // Dibuja el agujero (en este ejemplo, con color negro)
+            // Dibuja el agujero en color negro
             paint.color = Color.BLACK
             canvas.drawCircle(holeX, holeY, holeRadius, paint)
             // Dibuja el marcador de puntos
-            if(isBallInHole()){
-                paint.color = Color.BLACK
-            }else{
-                paint.color = Color.WHITE
-            }
+            paint.color = if (isBallInHole()) Color.BLACK else Color.WHITE
             paint.textSize = 50f
             canvas.drawText("Puntos: $score", 50f, 100f, paint)
-            // Si la pelota está en el agujero, dibuja el contador de tiempo con semitransparencia
+            // Si la pelota está en el agujero, muestra el contador
             if (isBallInHole()) {
-                paint.color = Color.argb(127, 1, 1, 1)
+                paint.color = Color.argb(127, 40, 40, 40)
                 paint.textSize = 150f
                 canvas.drawText("$timeLeft", (screenWidth / 2 - 75f), (screenHeight / 2 + 50f), paint)
             }
-            // Aplica transparencia al color de la pelota si se encuentra en el agujero (50% opacidad)
+            // Aplica transparencia a la pelota si está en el agujero
             ballPaint.alpha = if (isBallInHole()) 128 else 255
-            // Dibuja la pelota en su posición actual
             canvas.drawCircle(ballX, ballY, radius, ballPaint)
         }
     }
